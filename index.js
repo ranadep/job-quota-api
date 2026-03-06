@@ -3,9 +3,19 @@ const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 
-// Add this to handle raw text body as fallback
-app.use(express.json());
 app.use(express.text({ type: '*/*' }));
+app.use((req, res, next) => {
+  if (typeof req.body === 'string') {
+    try {
+      const cleaned = req.body.replace(/\r\n/g, '\\n').replace(/\r/g, '\\n').replace(/\n/g, '\\n');
+      req.body = JSON.parse(cleaned);
+    } catch (e) {
+      return res.status(400).json({ error: 'Could not parse body: ' + e.message });
+    }
+  }
+  next();
+});
+app.use(express.json());
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -20,24 +30,9 @@ const LIMITS = {
 };
 
 app.post('/post-job', async (req, res) => {
-  let body = req.body;
+  const { email, tier, title, description, link } = req.body;
 
-  // If body came in as a string (due to bad JSON), clean and parse it
-  if (typeof body === 'string') {
-    body = body
-      .replace(/[\r\n\t]/g, ' ')  // replace newlines/tabs with spaces
-      .replace(/\s+/g, ' ');       // collapse multiple spaces
-    try {
-      body = JSON.parse(body);
-    } catch (e) {
-      return res.status(400).json({ error: 'Could not parse body: ' + e.message });
-    }
-  }
-
-  const { email, tier, title, description, link } = body;
-
-  // Sanitize each field just in case
-  const clean = (str) => (str || '').replace(/[\r\n\t]/g, ' ').trim();
+  const clean = (str) => (str || '').replace(/\\n/g, '\n').trim();
 
   if (!email || !tier || !title || !description)
     return res.status(400).json({ error: 'Missing fields' });
