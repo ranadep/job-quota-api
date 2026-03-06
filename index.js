@@ -3,18 +3,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 
-app.use(express.text({ type: '*/*' }));
-app.use((req, res, next) => {
-  if (typeof req.body === 'string') {
-    try {
-      const cleaned = req.body.replace(/\r\n/g, '\\n').replace(/\r/g, '\\n').replace(/\n/g, '\\n');
-      req.body = JSON.parse(cleaned);
-    } catch (e) {
-      return res.status(400).json({ error: 'Could not parse body: ' + e.message });
-    }
-  }
-  next();
-});
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 const supabase = createClient(
@@ -31,8 +20,6 @@ const LIMITS = {
 
 app.post('/post-job', async (req, res) => {
   const { email, tier, title, description, link } = req.body;
-
-  const clean = (str) => (str || '').replace(/\\n/g, '\n').trim();
 
   if (!email || !tier || !title || !description)
     return res.status(400).json({ error: 'Missing fields' });
@@ -62,10 +49,10 @@ app.post('/post-job', async (req, res) => {
 
   const message = [
     '━━━━━━━━━━━━━━━━━━━━━━',
-    `📢 **${clean(title)}**`,
+    `📢 **${title}**`,
     '',
-    `📝 ${clean(description)}`,
-    link ? `🔗 Apply: ${clean(link)}` : '',
+    `📝 ${description}`,
+    link ? `🔗 Apply: ${link}` : '',
     '━━━━━━━━━━━━━━━━━━━━━━'
   ].filter(Boolean).join('\n');
 
