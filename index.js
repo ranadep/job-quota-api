@@ -2,7 +2,6 @@ const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
-
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
@@ -19,17 +18,29 @@ const LIMITS = {
 };
 
 app.post('/post-job', async (req, res) => {
-  const { email, tier, title, description, link } = req.body;
+  const { company, title, description, link } = req.body;
 
-  if (!email || !tier || !title || !description)
+  if (!company || !title || !description)
     return res.status(400).json({ error: 'Missing fields' });
 
-  const limit = LIMITS[tier.toLowerCase()];
-  if (limit === undefined) return res.status(400).json({ error: 'Invalid tier' });
-  if (limit === 0) return res.status(403).json({ error: 'Your tier cannot post jobs' });
+  // Look up company in sponsors table
+  const { data: sponsor, error: sponsorError } = await supabase
+    .from('sponsors')
+    .select('tier')
+    .ilike('company_name', company.trim())
+    .single();
+
+  if (sponsorError || !sponsor)
+    return res.status(403).json({ error: `Company "${company}" is not a registered sponsor` });
+
+  const tier = sponsor.tier;
+  const limit = LIMITS[tier];
+
+  if (limit === 0)
+    return res.status(403).json({ error: 'Your tier cannot post jobs' });
 
   const month = new Date().toISOString().slice(0, 7).replace('-', '_');
-  const sponsorKey = `${tier.toLowerCase()}_${email}_${month}`;
+  const sponsorKey = `${tier}_${company.trim().toLowerCase().replace(/\s+/g, '_')}_${month}`;
 
   const { data } = await supabase
     .from('job_quotas')
@@ -39,7 +50,7 @@ app.post('/post-job', async (req, res) => {
 
   const currentCount = data?.count || 0;
   if (currentCount >= limit)
-    return res.status(429).json({ error: `Monthly limit of ${limit} reached` });
+    return res.status(429).json({ error: `Monthly limit of ${limit} reached for ${company}` });
 
   await supabase.from('job_quotas').upsert({
     sponsor_key: sponsorKey,
@@ -49,10 +60,11 @@ app.post('/post-job', async (req, res) => {
 
   const message = [
     '━━━━━━━━━━━━━━━━━━━━━━',
-    `**${title}**`,
+    `📢 **${title}**`,
+    `🏢 ${company}`,
     '',
-    `${description}`,
-    link ? `🔗 Apply here: ${link}` : '',
+    `📝 ${description}`,
+    link ? `🔗 Apply: ${link}` : '',
     '━━━━━━━━━━━━━━━━━━━━━━'
   ].filter(Boolean).join('\n');
 
@@ -62,7 +74,7 @@ app.post('/post-job', async (req, res) => {
     body: JSON.stringify({ content: message })
   });
 
-  res.json({ success: true, used: currentCount + 1, limit });
+  res.json({ success: true, used: currentCount + 1, limit, tier });
 });
 
 app.listen(process.env.PORT || 3000);
