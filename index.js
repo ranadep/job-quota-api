@@ -60,11 +60,12 @@ app.post('/post-job', async (req, res) => {
 
   const message = [
     '━━━━━━━━━━━━━━━━━━━━━━',
-    `📢 **${title}**`,
-    `🏢 ${company}`,
+    `**${title}**`,
+    `${company}`,
     '',
     `📝 ${description}`,
-    link ? `🔗 Apply: ${link}` : '',
+    '',
+    link ? `Apply: ${link}` : '',
     '━━━━━━━━━━━━━━━━━━━━━━'
   ].filter(Boolean).join('\n');
 
